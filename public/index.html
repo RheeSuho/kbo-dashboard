@@ -1588,6 +1588,9 @@ function renderStandingsTab() {
 
 // ── Boot ──────────────────────────────────────────────────
 init().then(() => loadSchedule());
+
+// 오늘 경기 5분마다 자동 갱신 (경기 중 상태 반영)
+setInterval(() => loadTodayGames(), 5 * 60 * 1000);
 </script>
 </body>
 </html>
