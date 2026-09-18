@@ -24,7 +24,7 @@ const TEAMS = [
     { id: 'SS', name: '삼성', color: '#1f3fce' },
     { id: 'LG', name: 'LG',   color: '#c30452' },
     { id: 'HT', name: 'KIA',  color: '#ea0029' },
-    { id: 'OB', name: '두산', color: '#01012B' },
+    { id: 'OB', name: '두산', color: '#070084' },
     { id: 'NC', name: 'NC',   color: '#1c5da4' },
     { id: 'SK', name: 'SSG',  color: '#ce0e2d' },
     { id: 'HH', name: '한화', color: '#ff5500' },
