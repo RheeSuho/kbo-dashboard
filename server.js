@@ -428,9 +428,18 @@ app.get('/api/preview/:gameId', async (req, res) => {
     }
 });
 
-// ── YouTube highlight (RSS 방식) ──────────────────────────
+// ── YouTube highlight (RSS 방식, 누적 저장) ───────────────
 const TVING_CHANNEL_ID = 'UC8JtQf77wqhVpOQ8Cze8JjA';
 let rssCache = { data: null, t: 0 };
+// RSS에서 발견한 영상을 서버 실행 동안 누적 (videoId → title)
+const highlightStore = new Map();
+
+function storeRssEntries(xml) {
+    const entries = [...xml.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>[\s\S]*?<title>([^<]+)<\/title>/g)];
+    entries.forEach(([, videoId, title]) => {
+        if (!highlightStore.has(videoId)) highlightStore.set(videoId, title);
+    });
+}
 
 async function fetchTvingRss() {
     if (rssCache.data && Date.now() - rssCache.t < 30 * 60 * 1000) return rssCache.data;
@@ -439,8 +448,12 @@ async function fetchTvingRss() {
         { timeout: 8000 }
     );
     rssCache = { data, t: Date.now() };
+    storeRssEntries(data);
     return data;
 }
+
+// 서버 시작 시 초기 RSS 미리 로드
+fetchTvingRss().catch(e => console.warn('[init RSS]', e.message));
 
 app.get('/api/highlight', async (req, res) => {
     try {
@@ -452,18 +465,20 @@ app.get('/api/highlight', async (req, res) => {
         const d = parseInt(dateStr.slice(6, 8), 10);
         const dateLabel = `${m}/${d}`;   // "9/17"
 
-        const xml = await fetchTvingRss();
+        // RSS 폴링 → 새 영상 누적 저장
+        await fetchTvingRss();
 
-        // <entry> 블록마다 videoId + title 추출
-        const entries = [...xml.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>[\s\S]*?<title>([^<]+)<\/title>/g)];
-        const match = entries.find(([, , title]) =>
-            title.includes(dateLabel) &&
-            (title.includes(away) || title.includes(home))
-        );
+        // 누적된 전체 영상에서 검색
+        let matchId = null, matchTitle = null;
+        for (const [videoId, title] of highlightStore) {
+            if (title.includes(dateLabel) && (title.includes(away) || title.includes(home))) {
+                matchId = videoId;
+                matchTitle = title;
+                break;
+            }
+        }
 
-        const videoId = match ? match[1] : null;
-        const title   = match ? match[2] : null;
-        res.json({ videoId, title });
+        res.json({ videoId: matchId, title: matchTitle });
     } catch (e) {
         console.error('[highlight]', e.message);
         res.status(500).json({ error: e.message });
