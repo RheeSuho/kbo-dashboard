@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KBO 대시보드</title>
+<style>
+/* ── Design tokens ─────────────────────────────────────── */
+:root {
+  --team-color: #FF5500;
+
+  /* dark mode (default) */
+  --bg:         #0D0D0D;
+  --surface:    #1A1A1A;
+  --surface2:   #242424;
+  --border:     #2E2E2E;
+  --text:       #E8E8E8;
+  --text2:      #AAAAAA;
+  --muted:      #666666;
+  --shadow:     rgba(0,0,0,.4);
+
+  --win:  #3CB371;
+  --lose: #E03A3A;
+  --draw: #888;
+}
+[data-theme="light"] {
+  --bg:       #F3F4F6;
+  --surface:  #FFFFFF;
+  --surface2: #F9FAFB;
+  --border:   #E5E7EB;
+  --text:     #111827;
+  --text2:    #4B5563;
+  --muted:    #9CA3AF;
+  --shadow:   rgba(0,0,0,.1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  transition: background .2s, color .2s;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+header {
+  background: var(--surface);
+  border-bottom: 2px solid var(--team-color);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background .2s, border-color .3s;
+}
+#stickyBar { box-shadow: 0 2px 8px var(--shadow); }
+.logo-area { display: flex; flex-direction: column; }
+.logo-area h1 {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--team-color);
+  letter-spacing: -0.5px;
+  transition: color .3s;
+}
+.logo-area .season { font-size: 11px; color: var(--muted); }
+
+/* ── Team context (팀 선택 + 서브탭 묶음) ────────────────── */
+#teamContext {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.team-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Team selector ───────────────────────────────────────── */
+.team-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  flex: 1;
+  scrollbar-width: none;
+  padding: 2px 0;
+}
+.team-selector::-webkit-scrollbar { display: none; }
+.team-btn {
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface2);
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  white-space: nowrap;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.team-btn:hover { color: var(--text); border-color: var(--muted); }
+.team-btn.active {
+  background: var(--team-color);
+  border-color: var(--team-color);
+  color: #fff;
+}
+
+/* ── Team record ─────────────────────────────────────────── */
+.team-record {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.record-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.rec-w { color: var(--win);  font-weight: 800; font-size: 15px; }
+.rec-d { color: var(--draw); font-weight: 700; font-size: 13px; }
+.rec-l { color: var(--lose); font-weight: 800; font-size: 15px; }
+.rec-label { color: var(--muted); font-size: 10px; }
+
+/* ── Theme toggle ────────────────────────────────────────── */
+.theme-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.theme-btn:hover { color: var(--team-color); border-color: var(--team-color); }
+
+/* ── Sticky wrapper ──────────────────────────────────────── */
+#stickyBar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* ── Main nav (대메뉴) ────────────────────────────────────── */
+nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  padding: 0 20px;
+}
+nav button {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 18px 9px;
+  transition: color .15s, border-color .15s;
+}
+nav button.active { color: var(--team-color); border-bottom-color: var(--team-color); }
+nav button:hover:not(.active) { color: var(--text); }
+
+/* ── Sub-nav (선수 기록 하위) ─────────────────────────────── */
+.sub-nav {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  padding: 0 20px;
+}
+.sub-nav button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px 6px;
+  transition: color .15s, border-color .15s;
+}
+.sub-nav button.active { color: var(--team-color); border-bottom-color: var(--team-color); }
+.sub-nav button:hover:not(.active) { color: var(--text); }
+
+/* ── Content ─────────────────────────────────────────────── */
+main { max-width: 1000px; margin: 0 auto; padding: 20px 16px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Month nav ───────────────────────────────────────────── */
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.month-nav .nav-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 5px 11px;
+  transition: background .15s;
+}
+.month-nav .nav-btn:hover { background: var(--surface2); }
+.month-label {
+  font-size: 15px;
+  font-weight: 700;
+  min-width: 80px;
+  text-align: center;
+}
+.month-summary {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text2);
+  align-items: center;
+}
+.mw { color: var(--win);  font-weight: 700; font-size: 14px; }
+.ml { color: var(--lose); font-weight: 700; font-size: 14px; }
+.md { color: var(--draw); }
+
+/* ── Game list ───────────────────────────────────────────── */
+.game-list { display: flex; flex-direction: column; gap: 7px; }
+.game-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: 80px auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  transition: background .1s;
+}
+.game-row:hover { background: var(--surface2); }
+.game-row.win-row  { border-left-color: var(--win); }
+.game-row.lose-row { border-left-color: var(--lose); }
+.game-row.draw-row { border-left-color: var(--draw); }
+.game-row.upcoming { border-left-color: var(--border); }
+
+.game-date { font-size: 13px; line-height: 1.4; }
+.game-date .dow { font-size: 11px; color: var(--muted); }
+
+.ha-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  width: 20px;
+  height: 18px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.ha-home { background: var(--team-color); color: #fff; border: 1px solid transparent; }
+.ha-away { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+.game-matchup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.team-name { font-weight: 700; }
+.team-name.my-team { color: var(--text); }
+.inline-score { font-size: 16px; font-weight: 800; }
+.starter-pill {
+  font-size: 11px;
+  color: var(--text2);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.inline-sep   { color: var(--muted); font-size: 13px; font-weight: 400; }
+.inline-vs    { color: var(--muted); font-size: 12px; }
+.score-win  { color: var(--win); }
+.score-lose { color: var(--lose); }
+.upcoming-time { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+.game-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.stadium-text { color: var(--muted); font-size: 11px; }
+.result-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 4px;
+}
+.badge-W { background: rgba(60,179,113,.15);  color: var(--win); }
+.badge-L { background: rgba(224,58,58,.15);   color: var(--lose); }
+.badge-D { background: rgba(136,136,136,.1);  color: var(--draw); }
+
+/* ── Stats table ─────────────────────────────────────────── */
+.stats-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.stats-title { font-size: 15px; font-weight: 700; }
+.refresh-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 11px;
+  transition: all .15s;
+}
+.refresh-btn:hover { color: var(--team-color); border-color: var(--team-color); }
+
+.table-scroll { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: var(--surface2);
+  border-bottom: 2px solid var(--team-color);
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  padding: 9px 10px;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  position: sticky;
+  top: 0;
+}
+th.col-name { text-align: left; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text); }
+th.sort-asc::after  { content: ' ▲'; color: var(--team-color); }
+th.sort-desc::after { content: ' ▼'; color: var(--team-color); }
+tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--surface2); }
+tbody td { padding: 9px 10px; text-align: center; white-space: nowrap; font-size: 13px; color: var(--text2); vertical-align: middle; }
+tbody td.col-name { text-align: left; font-weight: 600; color: var(--text); }
+td.hi { color: var(--team-color); font-weight: 700; }
+
+/* ── Loading ─────────────────────────────────────────────── */
+.msg {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--muted);
+}
+.spinner {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--team-color);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+
+/* ── Today's games ───────────────────────────────────────── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text2);
+}
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.today-games {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.today-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.today-matchup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.today-team {
+  font-size: 15px;
+  font-weight: 700;
+  min-width: 36px;
+  text-align: center;
+}
+.today-score-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+.today-scores {
+  display: flex;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+.today-scores .win  { color: var(--win); }
+.today-scores .lose { color: var(--lose); }
+.today-scores .draw { color: var(--draw); }
+.today-scores .sep  { color: var(--muted); font-weight: 300; }
+.today-time { font-size: 18px; font-weight: 700; color: var(--text2); }
+.today-meta { font-size: 11px; color: var(--muted); text-align: center; }
+.today-live { color: #e06c3a; font-weight: 700; }
+
+/* ── 최근 5경기 배지 ──────────────────────────────────────── */
+.l5-wrap { display: inline-flex; gap: 3px; align-items: center; }
+.l5-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.l5-w { background: rgba(60,179,113,.2); color: var(--win);  border: 1px solid rgba(60,179,113,.4); }
+.l5-l { background: rgba(224,58,58,.2);  color: var(--lose); border: 1px solid rgba(224,58,58,.4); }
+.l5-d { background: rgba(136,136,136,.2); color: var(--draw); border: 1px solid rgba(136,136,136,.4); }
+
+.pitcher-info {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.p-win  { color: var(--win);  }
+.p-lose { color: var(--lose); }
+
+.row-pitcher-info {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* ── 게임 프리뷰 ─────────────────────────────────────────── */
+.preview-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.preview-starter-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.preview-starter-name {
+  font-size: 15px;
+  font-weight: 800;
+}
+.preview-starter-num {
+  font-size: 11px;
+  color: var(--muted);
+}
+.preview-stat-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.preview-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 8px;
+  text-align: center;
+  min-width: 44px;
+}
+.preview-stat .s-label { font-size: 9px; color: var(--muted); display: block; }
+.preview-stat .s-val   { font-size: 13px; font-weight: 700; }
+.preview-vs-label {
+  font-size: 10px;
+  color: var(--muted);
+  margin: 6px 0 4px;
+}
+.preview-starter {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.pitch-bar-chart {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.pbc-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  height: 110px;
+}
+.pbc-col {
+  width: 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+}
+.pbc-pct {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+.pbc-bar {
+  width: 24px;
+  border-radius: 3px 3px 0 0;
+  min-height: 3px;
+}
+.pbc-labels {
+  display: flex;
+  gap: 7px;
+  border-top: 1px solid var(--border);
+  padding-top: 5px;
+  margin-top: 4px;
+}
+.pbc-lbl {
+  width: 38px;
+  text-align: center;
+  font-size: 9px;
+  color: var(--muted);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.preview-starter-info { flex: 1; min-width: 0; }
+.preview-season-vs {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text2);
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border);
+}
+.preview-season-vs .vs-label { font-size: 11px; color: var(--muted); }
+.preview-season-vs .vs-scores { display: flex; align-items: center; gap: 10px; }
+.preview-season-vs strong { color: var(--text); font-size: 14px; }
+
+/* ── 라인스코어 보드 ──────────────────────────────────────── */
+.linescore-wrap {
+  display: none;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+  padding: 10px 14px;
+  animation: fadeIn .15s ease;
+}
+.linescore-wrap.open { display: block; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(-4px) } to { opacity:1; transform:none } }
+
+.linescore-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: auto;
+}
+.linescore-table th,
+.linescore-table td {
+  text-align: center;
+  padding: 5px 6px;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--text2);
+}
+.linescore-table th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+}
+.linescore-table td.ls-team {
+  text-align: left;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 36px;
+  padding-right: 10px;
+}
+.linescore-table td.ls-total {
+  font-weight: 800;
+  color: var(--text);
+  border-left: 1px solid var(--border);
+}
+.linescore-table td.ls-win  { color: var(--win); }
+.linescore-table td.ls-lose { color: var(--lose); }
+.linescore-table .ls-divider { border-left: 1px solid var(--border); }
+
+.yt-wrap {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.yt-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.yt-frame-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.yt-frame-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.game-row { cursor: default; }
+.game-row.has-game { cursor: pointer; }
+.game-row.has-game:hover { background: var(--surface2); }
+.game-row.row-active { background: var(--surface2); }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .game-row { grid-template-columns: 60px auto 1fr; }
+  .game-right { display: none; }
+  header { padding: 10px 14px; gap: 8px; }
+}
+</style>
+</head>
+<body>
+
+<div id="stickyBar">
+<header>
+  <div class="logo-area">
+    <h1>⚾ KBO</h1>
+    <div class="season">2026 시즌</div>
+  </div>
+  <button class="theme-btn" id="themeToggle" title="라이트/다크 전환">🌙</button>
+</header>
+
+<!-- 대메뉴 -->
+<nav>
+  <button class="active" data-menu="team">팀별 기록</button>
+  <button data-menu="standings">리그 순위</button>
+</nav>
+
+<!-- 팀 선택 + 서브탭: 팀별 기록 전용 (리그 순위 선택 시 숨김) -->
+<div id="teamContext">
+  <div class="team-selector-bar">
+    <div class="team-selector" id="teamSelector"><!-- injected by JS --></div>
+    <div class="team-record" id="teamRecord" style="display:none">
+      <div class="record-row">
+        <span class="rec-w" id="recW">—</span><span class="rec-label">승</span>
+        <span class="rec-d" id="recD">—</span><span class="rec-label">무</span>
+        <span class="rec-l" id="recL">—</span><span class="rec-label">패</span>
+      </div>
+      <div style="color:var(--muted);font-size:10px" id="recPct"></div>
+    </div>
+  </div>
+  <div class="sub-nav" id="subNav">
+    <button class="active" data-sub="schedule">경기 일정</button>
+    <button data-sub="hitters">타자 기록</button>
+    <button data-sub="pitchers">투수 기록</button>
+  </div>
+</div>
+</div><!-- /#stickyBar -->
+
+<main>
+
+  <!-- 팀별 기록 패널 -->
+  <div id="panel-team" class="tab-panel active">
+
+    <!-- 경기 일정 -->
+    <div id="sub-schedule" class="tab-panel active">
+      <div class="month-nav">
+        <button class="nav-btn" id="prevMonth">‹</button>
+        <span class="month-label" id="monthLabel">—</span>
+        <button class="nav-btn" id="nextMonth">›</button>
+        <div class="month-summary">
+          <span class="mw" id="mW">0</span>승&ensp;
+          <span class="ml" id="mL">0</span>패
+          <span class="md" id="mD" style="display:none"></span>
+        </div>
+      </div>
+      <div class="game-list" id="gameList">
+        <div class="msg"><span class="spinner"></span>불러오는 중…</div>
+      </div>
+    </div>
+
+    <!-- 타자 기록 -->
+    <div id="sub-hitters" class="tab-panel">
+      <div class="stats-toolbar">
+        <div class="stats-title" id="hitterTitle">타자 기록</div>
+        <button class="refresh-btn" id="refreshHitters">↻ 새로고침</button>
+      </div>
+      <div id="hitterTable" class="table-scroll">
+        <div class="msg">탭을 선택하면 로드됩니다.</div>
+      </div>
+    </div>
+
+    <!-- 투수 기록 -->
+    <div id="sub-pitchers" class="tab-panel">
+      <div class="stats-toolbar">
+        <div class="stats-title" id="pitcherTitle">투수 기록</div>
+        <button class="refresh-btn" id="refreshPitchers">↻ 새로고침</button>
+      </div>
+      <div id="pitcherTable" class="table-scroll">
+        <div class="msg">탭을 선택하면 로드됩니다.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 리그 순위 패널 -->
+  <div id="panel-standings" class="tab-panel">
+    <div class="stats-toolbar">
+      <div class="stats-title">2026 리그 순위</div>
+      <button class="refresh-btn" id="refreshStandings">↻ 새로고침</button>
+    </div>
+    <div id="standingsTable" class="table-scroll">
+      <div class="msg"><span class="spinner"></span>불러오는 중…</div>
+    </div>
+
+    <div class="section-divider">
+      <span id="todayDateLabel">오늘의 경기</span>
+    </div>
+    <div id="todayGames" class="today-games">
+      <div class="msg"><span class="spinner"></span>불러오는 중…</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── State ─────────────────────────────────────────────────
+const now      = new Date();
+let curYear    = now.getFullYear();
+let curMonth   = now.getMonth() + 1;
+let curTeamId  = localStorage.getItem('kbo_team') || 'HH';
+let curTheme   = localStorage.getItem('kbo_theme') || 'dark';
+
+let teams      = [];
+let standings  = [];
+let cacheHit   = {};
+let pendingAutoOpen = null; // 자동 펼침할 gameId
+let cachePitch = {};
+
+// 정렬 상태 (col: 컬럼명, dir: 1=오름차순 -1=내림차순)
+const hitSort  = { col: null, dir: -1 };
+const pitSort  = { col: null, dir: -1 };
+
+// ── Theme ─────────────────────────────────────────────────
+function applyTheme(t) {
+  curTheme = t;
+  document.documentElement.dataset.theme = t;
+  document.getElementById('themeToggle').textContent = t === 'dark' ? '🌙' : '☀️';
+  localStorage.setItem('kbo_theme', t);
+}
+document.getElementById('themeToggle').addEventListener('click', () => {
+  applyTheme(curTheme === 'dark' ? 'light' : 'dark');
+});
+applyTheme(curTheme);
+
+// ── Team color ────────────────────────────────────────────
+function applyTeamColor(color) {
+  document.documentElement.style.setProperty('--team-color', color);
+}
+
+// ── Init: load teams + standings ──────────────────────────
+async function init() {
+  // 팀 목록은 필수 — 실패하면 아무것도 못 함
+  try {
+    teams = await fetch('/api/teams').then(r => r.json());
+  } catch (e) {
+    console.error('[teams]', e);
+    return;
+  }
+  renderTeamSelector();
+  selectTeam(curTeamId, false);
+
+  // 순위는 부가 정보 — 실패해도 팀 버튼은 이미 그려진 상태
+  fetch('/api/standings')
+    .then(r => r.json())
+    .then(data => { standings = data; updateRecord(curTeamId); })
+    .catch(e => console.warn('[standings]', e));
+}
+
+function renderTeamSelector() {
+  const el = document.getElementById('teamSelector');
+  el.innerHTML = teams.map(t => `
+    <button class="team-btn${t.id === curTeamId ? ' active' : ''}"
+            data-id="${t.id}" data-color="${t.color}"
+            style="${t.id === curTeamId ? `background:${t.color};border-color:${t.color}` : ''}">
+      ${t.name}
+    </button>
+  `).join('');
+
+  el.querySelectorAll('.team-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectTeam(btn.dataset.id));
+  });
+}
+
+function selectTeam(id, reload = true) {
+  curTeamId = id;
+  localStorage.setItem('kbo_team', id);
+
+  const team = teams.find(t => t.id === id);
+  if (!team) return;
+
+  // 색상
+  applyTeamColor(team.color);
+
+  document.title = `${team.name} — KBO 대시보드`;
+
+  // 팀 버튼 active
+  document.querySelectorAll('.team-btn').forEach(btn => {
+    const active = btn.dataset.id === id;
+    btn.classList.toggle('active', active);
+    btn.style.background    = active ? team.color : '';
+    btn.style.borderColor   = active ? team.color : '';
+    btn.style.color         = active ? '#fff' : '';
+  });
+
+  // 스탯 제목
+  document.getElementById('hitterTitle').textContent  = `2026 타자 기록 — ${team.name}`;
+  document.getElementById('pitcherTitle').textContent = `2026 투수 기록 — ${team.name}`;
+
+  // 활성 탭 border 색 업데이트
+  document.querySelectorAll('nav button.active, #subNav button.active').forEach(b => {
+    b.style.borderBottomColor = team.color;
+  });
+
+  // 시즌 승/무/패 표시
+  updateRecord(id);
+
+  if (reload) {
+    cacheHit[id]   = null;
+    cachePitch[id] = null;
+    scheduleLoaded = false;
+
+    const activeMenu = document.querySelector('nav button.active')?.dataset.menu;
+    if (activeMenu === 'team') {
+      if (curSubTab === 'schedule')       loadSchedule();
+      else if (curSubTab === 'hitters')   loadHitters(true);
+      else if (curSubTab === 'pitchers')  loadPitchers(true);
+    }
+  }
+}
+
+// ── Team season record ────────────────────────────────────
+function updateRecord(teamId) {
+  const team = teams.find(t => t.id === teamId);
+  if (!team || !standings.length) return;
+
+  const row = standings.find(s => s.teamName === team.name);
+  const recEl = document.getElementById('teamRecord');
+  if (!row) { recEl.style.display = 'none'; return; }
+
+  document.getElementById('recW').textContent = row.w;
+  document.getElementById('recD').textContent = row.d;
+  document.getElementById('recL').textContent = row.l;
+  document.getElementById('recPct').textContent = `승률 ${row.pct} · ${row.rank}위`;
+  recEl.style.display = 'flex';
+}
+
+// ── 탭 전환 헬퍼 ──────────────────────────────────────────
+let curSubTab = 'schedule';
+
+function setAccentColor(btn, isSubNav = false) {
+  const team = teams.find(t => t.id === curTeamId);
+  if (team) btn.style.borderBottomColor = team.color;
+}
+
+// ── 대메뉴 (팀별 기록 / 리그 순위) ───────────────────────
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const menu = btn.dataset.menu;
+
+    document.querySelectorAll('nav button').forEach(b => {
+      b.classList.remove('active'); b.style.borderBottomColor = '';
+    });
+    btn.classList.add('active');
+    setAccentColor(btn);
+
+    document.getElementById('panel-team').classList.toggle('active', menu === 'team');
+    document.getElementById('panel-standings').classList.toggle('active', menu === 'standings');
+    document.getElementById('teamContext').style.display = menu === 'team' ? 'block' : 'none';
+
+    if (menu === 'standings') loadStandings();
+    if (menu === 'team') {
+      if (curSubTab === 'schedule')  loadSchedule();
+      else if (curSubTab === 'hitters')  loadHitters();
+      else if (curSubTab === 'pitchers') loadPitchers();
+    }
+  });
+});
+
+// ── 서브탭 (경기 일정 / 타자 기록 / 투수 기록) ────────────
+document.querySelectorAll('.sub-nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const sub = btn.dataset.sub;
+    curSubTab = sub;
+
+    document.querySelectorAll('.sub-nav button').forEach(b => {
+      b.classList.remove('active'); b.style.borderBottomColor = '';
+    });
+    btn.classList.add('active');
+    setAccentColor(btn, true);
+
+    document.querySelectorAll('#sub-schedule, #sub-hitters, #sub-pitchers')
+      .forEach(p => p.classList.remove('active'));
+    document.getElementById('sub-' + sub).classList.add('active');
+
+    if (sub === 'schedule')  loadSchedule();
+    if (sub === 'hitters')   loadHitters();
+    if (sub === 'pitchers')  loadPitchers();
+  });
+});
+
+// ── Month nav ─────────────────────────────────────────────
+let scheduleLoaded = false;
+document.getElementById('prevMonth').addEventListener('click', () => {
+  curMonth--;
+  if (curMonth < 1) { curMonth = 12; curYear--; }
+  loadSchedule();
+});
+document.getElementById('nextMonth').addEventListener('click', () => {
+  curMonth++;
+  if (curMonth > 12) { curMonth = 1; curYear++; }
+  loadSchedule();
+});
+
+// ── Schedule ──────────────────────────────────────────────
+async function loadSchedule() {
+  const lbl = document.getElementById('monthLabel');
+  lbl.textContent = `${curYear}.${String(curMonth).padStart(2,'0')}`;
+  document.getElementById('mW').textContent = '0';
+  document.getElementById('mL').textContent = '0';
+  document.getElementById('mD').style.display = 'none';
+
+  const el = document.getElementById('gameList');
+  el.innerHTML = '<div class="msg"><span class="spinner"></span>불러오는 중…</div>';
+
+  try {
+    const url = `/api/schedule?year=${curYear}&month=${curMonth}&teamId=${curTeamId}`;
+    const data = await fetch(url).then(r => r.json());
+    if (data.error) throw new Error(data.error);
+    renderSchedule(data.games);
+    scheduleLoaded = true;
+  } catch (e) {
+    el.innerHTML = `<div class="msg">❌ ${e.message}</div>`;
+  }
+}
+
+function renderSchedule(games) {
+  const el = document.getElementById('gameList');
+  if (!games.length) { el.innerHTML = '<div class="msg">경기 일정이 없습니다.</div>'; return; }
+
+  let w = 0, l = 0, d = 0;
+  const team = teams.find(t => t.id === curTeamId);
+  const teamName = team?.name || '';
+
+  let html = '';
+  games.forEach((g, idx) => {
+    if (g.result === 'W') w++;
+    else if (g.result === 'L') l++;
+    else if (g.result === 'D') d++;
+
+    const canExpand = !!g.gameId;
+    const rowCls = g.completed
+      ? (g.result === 'W' ? 'win-row' : g.result === 'L' ? 'lose-row' : 'draw-row')
+      : 'upcoming';
+
+    const opponent = g.isHome ? g.away : g.home;
+
+    const dateM = g.date.match(/^(\d+\.\d+)\((.+)\)$/);
+    const dateTxt = dateM ? dateM[1] : g.date;
+    const dow = dateM ? dateM[2] : '';
+
+    const haBadge = `<span class="ha-badge ${g.isHome ? 'ha-home' : 'ha-away'}">${g.isHome ? 'H' : 'A'}</span>`;
+
+    let matchupInner;
+    if (g.completed) {
+      const myScore  = g.isHome ? g.homeScore  : g.awayScore;
+      const oppScore = g.isHome ? g.awayScore  : g.homeScore;
+      const myCls    = g.result === 'W' ? 'score-win' : g.result === 'L' ? 'score-lose' : '';
+      matchupInner = `
+        <span class="team-name my-team">${teamName}</span>
+        <span class="inline-score ${myCls}">${myScore}</span>
+        <span class="inline-sep">:</span>
+        <span class="inline-score">${oppScore}</span>
+        <span class="team-name">${opponent}</span>`;
+    } else {
+      const myStarter  = g.isHome ? g.homeStarter : g.awayStarter;
+      const oppStarter = g.isHome ? g.awayStarter : g.homeStarter;
+      const starterHtml = (myStarter || oppStarter)
+        ? `<span class="starter-pill">${myStarter || '?'}</span><span style="color:var(--muted);font-size:11px">vs</span><span class="starter-pill">${oppStarter || '?'}</span>`
+        : '';
+      matchupInner = `
+        <span class="team-name my-team">${teamName}</span>
+        <span class="inline-vs">vs</span>
+        <span class="team-name">${opponent}</span>
+        ${starterHtml}
+        <span class="upcoming-time">${g.time || 'TBD'}</span>`;
+    }
+
+    const resultBadge = g.completed
+      ? `<span class="result-badge badge-${g.result}">${g.result === 'W' ? '승' : g.result === 'L' ? '패' : '무'}</span>`
+      : '';
+
+    const pitcherBadge = g.completed && (g.winPitcher || g.losePitcher)
+      ? `<div class="row-pitcher-info">
+          ${g.winPitcher  ? `<span class="p-win">승 ${g.winPitcher}</span>`  : ''}
+          ${g.losePitcher ? `<span class="p-lose">패 ${g.losePitcher}</span>` : ''}
+        </div>`
+      : '';
+
+    html += `
+    <div class="game-row ${rowCls}${canExpand ? ' has-game' : ''}" data-idx="${idx}" data-gameid="${g.gameId || ''}" data-away="${g.away}" data-home="${g.home}" data-ishome="${g.isHome ? '1' : '0'}">
+      <div class="game-date">
+        ${dateTxt}
+        <div class="dow">${dow}</div>
+      </div>
+      <div>${haBadge}</div>
+      <div class="game-matchup">
+        ${matchupInner}
+        ${pitcherBadge}
+      </div>
+      <div class="game-right">
+        <span class="stadium-text">${g.stadium}</span>
+        ${resultBadge}
+      </div>
+    </div>
+    <div class="linescore-wrap" id="ls-${idx}">
+      <div class="msg" style="font-size:12px"><span class="spinner"></span></div>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+  document.getElementById('mW').textContent = w;
+  document.getElementById('mL').textContent = l;
+  if (d > 0) {
+    const dEl = document.getElementById('mD');
+    dEl.textContent = `${d}무`;
+    dEl.style.display = 'inline';
+  }
+
+  // 클릭 이벤트
+  let openIdx = null;
+  el.querySelectorAll('.game-row.has-game').forEach(row => {
+    row.addEventListener('click', async () => {
+      const idx     = row.dataset.idx;
+      const gameId  = row.dataset.gameid;
+      const lsEl    = document.getElementById(`ls-${idx}`);
+      const isOpen  = lsEl.classList.contains('open');
+
+      // 다른 열린 항목 닫기
+      if (openIdx !== null && openIdx !== idx) {
+        const prev = document.getElementById(`ls-${openIdx}`);
+        if (prev) prev.classList.remove('open');
+        const prevRow = el.querySelector(`.game-row[data-idx="${openIdx}"]`);
+        if (prevRow) prevRow.classList.remove('row-active');
+      }
+
+      if (isOpen) {
+        lsEl.classList.remove('open');
+        row.classList.remove('row-active');
+        openIdx = null;
+        return;
+      }
+
+      lsEl.classList.add('open');
+      row.classList.add('row-active');
+      openIdx = idx;
+
+      if (lsEl.dataset.loaded) return;
+
+      const isCompleted = row.classList.contains('win-row') || row.classList.contains('lose-row') || row.classList.contains('draw-row');
+
+      try {
+        if (isCompleted) {
+          const away = row.dataset.away;
+          const home = row.dataset.home;
+          const [lsData, hlData] = await Promise.all([
+            fetch(`/api/game/${gameId}`).then(r => r.json()),
+            fetch(`/api/highlight?gameId=${gameId}&away=${encodeURIComponent(away)}&home=${encodeURIComponent(home)}`).then(r => r.json()),
+          ]);
+          lsEl.innerHTML = renderLinescore(lsData, hlData);
+        } else {
+          const pvData = await fetch(`/api/preview/${gameId}`).then(r => r.json());
+          const isHome = row.dataset.ishome === '1';
+          lsEl.innerHTML = renderPreview(pvData, isHome);
+        }
+        lsEl.dataset.loaded = '1';
+      } catch (e) {
+        lsEl.innerHTML = `<div class="msg" style="font-size:12px">❌ 불러오기 실패</div>`;
+      }
+    });
+  });
+
+  // 자동 펼침 처리
+  if (pendingAutoOpen) {
+    const targetRow = el.querySelector(`.game-row[data-gameid="${pendingAutoOpen}"]`);
+    if (targetRow) {
+      pendingAutoOpen = null;
+      setTimeout(() => {
+        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => targetRow.click(), 400);
+      }, 100);
+    } else {
+      pendingAutoOpen = null;
+    }
+  }
+}
+
+function renderPreview(p, isHome = false) {
+  const stat = (label, val) =>
+    `<div class="preview-stat"><span class="s-label">${label}</span><span class="s-val">${val ?? '-'}</span></div>`;
+
+  const PITCH_COLORS = ['#4f8ef7','#e05c5c','#2ecc7a','#f5a623','#a78bfa','#38bdf8'];
+
+  const starterCard = (s, teamLabel) => {
+    if (!s || !s.name) return `<div class="preview-starter"><div style="color:var(--muted);font-size:12px;padding:8px 0">선발 명단 발표 이전입니다.</div></div>`;
+
+    const kinds = s.pitKinds || [];
+    const maxRate = kinds.length ? Math.max(...kinds.map(k => k.rate)) : 1;
+    const barChartHtml = kinds.length ? `
+      <div class="pitch-bar-chart">
+        <div class="pbc-bars">
+          ${kinds.map((pk, i) => {
+            const h = Math.round(pk.rate / maxRate * 100);
+            return `<div class="pbc-col">
+              <span class="pbc-pct">${pk.rate}%</span>
+              <div class="pbc-bar" style="height:${h}%;background:${PITCH_COLORS[i % PITCH_COLORS.length]}"></div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="pbc-labels">
+          ${kinds.map(pk => `<div class="pbc-lbl">${pk.label}</div>`).join('')}
+        </div>
+      </div>` : '';
+
+    return `<div class="preview-starter">
+      <div class="preview-starter-info">
+        <div class="preview-starter-header">
+          <span class="preview-starter-name">${s.name}</span>
+          <span class="preview-starter-num">#${s.backnum} ${s.hitType || ''}</span>
+        </div>
+        <div class="preview-stat-row">
+          ${stat('ERA', s.season.era)}
+          ${stat('승-패', `${s.season.w}-${s.season.l}`)}
+          ${stat('이닝', s.season.inn)}
+          ${stat('K', s.season.kk)}
+          ${stat('WHIP', s.season.whip)}
+        </div>
+        <div class="preview-vs-label">vs 상대 시즌 (${s.vsOpponent.g || 0}경기)</div>
+        <div class="preview-stat-row">
+          ${stat('ERA', s.vsOpponent.era)}
+          ${stat('이닝', s.vsOpponent.inn)}
+          ${stat('승-패', `${s.vsOpponent.w??0}-${s.vsOpponent.l??0}`)}
+        </div>
+      </div>
+      ${barChartHtml}
+    </div>`;
+  };
+
+  const vs = p.seasonVs;
+  const vsHtml = vs ? `<div class="preview-season-vs">
+    <span class="vs-label">시즌 상대전적</span>
+    <div class="vs-scores">
+      <strong>${p.gameInfo?.aName || '원정'} ${vs.aw}승 ${vs.al}패 ${vs.ad}무</strong>
+      <span style="color:var(--muted)">vs</span>
+      <strong>${p.gameInfo?.hName || '홈'} ${vs.hw}승 ${vs.hl}패 ${vs.hd}무</strong>
+    </div>
+  </div>` : '';
+
+  return `<div class="preview-wrap">
+    ${isHome
+      ? starterCard(p.homeStarter, p.gameInfo?.hName)
+      : starterCard(p.awayStarter, p.gameInfo?.aName)}
+    ${isHome
+      ? starterCard(p.awayStarter, p.gameInfo?.aName)
+      : starterCard(p.homeStarter, p.gameInfo?.hName)}
+    ${vsHtml}
+  </div>`;
+}
+
+function renderLinescore(g, hl) {
+  const innings = Math.max(g.awayInnings.length, g.homeInnings.length, 9);
+  const nums = Array.from({ length: innings }, (_, i) => i + 1);
+
+  const awayWin = g.awayRheb[0] > g.homeRheb[0];
+  const homeWin = g.homeRheb[0] > g.awayRheb[0];
+
+  const awayRCls = awayWin ? 'ls-total ls-win' : homeWin ? 'ls-total ls-lose' : 'ls-total';
+  const homeRCls = homeWin ? 'ls-total ls-win' : awayWin ? 'ls-total ls-lose' : 'ls-total';
+
+  const headerCells = nums.map(n => `<th>${n}</th>`).join('') +
+    `<th class="ls-divider">R</th><th>H</th><th>E</th><th>B</th>`;
+
+  const awayRow = nums.map((_, i) => {
+    const v = g.awayInnings[i];
+    return `<td>${v !== undefined ? v : '-'}</td>`;
+  }).join('') +
+    `<td class="${awayRCls}">${g.awayRheb[0]??'-'}</td>` +
+    `<td class="ls-divider">${g.awayRheb[1]??'-'}</td>` +
+    `<td>${g.awayRheb[2]??'-'}</td><td>${g.awayRheb[3]??'-'}</td>`;
+
+  const homeRow = nums.map((_, i) => {
+    const v = g.homeInnings[i];
+    return `<td>${v !== undefined ? v : '-'}</td>`;
+  }).join('') +
+    `<td class="${homeRCls}">${g.homeRheb[0]??'-'}</td>` +
+    `<td class="ls-divider">${g.homeRheb[1]??'-'}</td>` +
+    `<td>${g.homeRheb[2]??'-'}</td><td>${g.homeRheb[3]??'-'}</td>`;
+
+  const ytHtml = hl?.videoId
+    ? `<div class="yt-wrap">
+        <div class="yt-label">하이라이트</div>
+        <div class="yt-frame-wrap">
+          <iframe src="https://www.youtube.com/embed/${hl.videoId}?rel=0&modestbranding=1"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen></iframe>
+        </div>
+      </div>`
+    : '';
+
+  return `
+    <div style="overflow-x:auto">
+      <table class="linescore-table">
+        <thead><tr><th></th>${headerCells}</tr></thead>
+        <tbody>
+          <tr><td class="ls-team">${g.away}</td>${awayRow}</tr>
+          <tr><td class="ls-team">${g.home}</td>${homeRow}</tr>
+        </tbody>
+      </table>
+    </div>
+    ${ytHtml}`;
+}
+
+// ── Hitters ───────────────────────────────────────────────
+const HIT_COLS = ['선수명','AVG','G','PA','HR','RBI','H','R','2B','3B','SB'];
+const HIT_HI   = new Set(['AVG','HR','RBI']);
+
+document.getElementById('refreshHitters').addEventListener('click', () => loadHitters(true));
+
+async function loadHitters(force = false) {
+  if (cacheHit[curTeamId] && !force) { renderStats('hitterTable', cacheHit[curTeamId], HIT_COLS, HIT_HI, hitSort, 'hitters'); return; }
+  const el = document.getElementById('hitterTable');
+  el.innerHTML = '<div class="msg"><span class="spinner"></span>불러오는 중…</div>';
+  try {
+    const data = await fetch(`/api/hitters?teamId=${curTeamId}`).then(r => r.json());
+    if (data.error) throw new Error(data.error);
+    cacheHit[curTeamId] = data;
+    hitSort.col = null;
+    renderStats('hitterTable', data, HIT_COLS, HIT_HI, hitSort, 'hitters');
+  } catch (e) {
+    el.innerHTML = `<div class="msg">❌ ${e.message}</div>`;
+  }
+}
+
+// ── Pitchers ──────────────────────────────────────────────
+const PIT_COLS = ['선수명','ERA','G','W','L','SV','HLD','IP','SO','BB','WHIP'];
+const PIT_HI   = new Set(['ERA']);
+
+document.getElementById('refreshPitchers').addEventListener('click', () => loadPitchers(true));
+
+async function loadPitchers(force = false) {
+  if (cachePitch[curTeamId] && !force) { renderStats('pitcherTable', cachePitch[curTeamId], PIT_COLS, PIT_HI, pitSort, 'pitchers'); return; }
+  const el = document.getElementById('pitcherTable');
+  el.innerHTML = '<div class="msg"><span class="spinner"></span>불러오는 중…</div>';
+  try {
+    const data = await fetch(`/api/pitchers?teamId=${curTeamId}`).then(r => r.json());
+    if (data.error) throw new Error(data.error);
+    cachePitch[curTeamId] = data;
+    pitSort.col = null;
+    renderStats('pitcherTable', data, PIT_COLS, PIT_HI, pitSort, 'pitchers');
+  } catch (e) {
+    el.innerHTML = `<div class="msg">❌ ${e.message}</div>`;
+  }
+}
+
+// ── Generic stats renderer (with sort) ───────────────────
+function renderStats(containerId, data, cols, hiSet, sortState, tableKey) {
+  const el = document.getElementById(containerId);
+  const { headers, players } = data;
+  const vis = cols.filter(c => headers.includes(c));
+
+  if (!players.length) {
+    el.innerHTML = '<div class="msg">선수 데이터가 없습니다.</div>';
+    return;
+  }
+
+  // 정렬 적용
+  let sorted = [...players];
+  if (sortState.col) {
+    sorted.sort((a, b) => {
+      const va = a[sortState.col] ?? '-';
+      const vb = b[sortState.col] ?? '-';
+      if (va === '-' && vb === '-') return 0;
+      if (va === '-') return 1;
+      if (vb === '-') return -1;
+      // 분수 표기(IP: "131 2/3") → 숫자 변환
+      const toNum = s => {
+        const m = String(s).match(/^(\d+)\s+(\d+)\/(\d+)$/);
+        if (m) return +m[1] + +m[2] / +m[3];
+        const n = parseFloat(String(s).replace(/[^\d.-]/g, ''));
+        return isNaN(n) ? null : n;
+      };
+      const na = toNum(va), nb = toNum(vb);
+      if (na !== null && nb !== null) return sortState.dir * (na - nb);
+      return sortState.dir * String(va).localeCompare(String(vb), 'ko');
+    });
+  }
+
+  // 헤더 렌더
+  const thHtml = vis.map(c => {
+    const isName = c === '선수명';
+    const isSorted = sortState.col === c;
+    const cls = [
+      isName ? 'col-name' : '',
+      'sortable',
+      isSorted ? (sortState.dir === -1 ? 'sort-desc' : 'sort-asc') : '',
+    ].filter(Boolean).join(' ');
+    return `<th class="${cls}" data-col="${c}">${c}</th>`;
+  }).join('');
+
+  // 바디 렌더
+  const trHtml = sorted.map(p =>
+    `<tr>${vis.map(c =>
+      `<td class="${c === '선수명' ? 'col-name' : ''} ${hiSet.has(c) ? 'hi' : ''}">${p[c] ?? '-'}</td>`
+    ).join('')}</tr>`
+  ).join('');
+
+  el.innerHTML = `<table><thead><tr>${thHtml}</tr></thead><tbody>${trHtml}</tbody></table>`;
+
+  // 헤더 클릭 → 정렬
+  el.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortState.col === col) {
+        sortState.dir *= -1;   // 같은 컬럼: 방향 토글
+      } else {
+        sortState.col = col;
+        // 숫자형 컬럼은 내림차순(높은값 먼저), 이름은 오름차순
+        sortState.dir = col === '선수명' ? 1 : -1;
+      }
+      const src = tableKey === 'hitters' ? cacheHit[curTeamId] : cachePitch[curTeamId];
+      renderStats(containerId, src, cols, hiSet, sortState, tableKey);
+    });
+  });
+}
+
+// ── Standings tab ─────────────────────────────────────────
+document.getElementById('refreshStandings').addEventListener('click', () => loadStandings(true));
+
+async function loadStandings(force = false) {
+  if (standings.length && !force) { renderStandingsTab(); loadTodayGames(); return; }
+  const el = document.getElementById('standingsTable');
+  el.innerHTML = '<div class="msg"><span class="spinner"></span>불러오는 중…</div>';
+  try {
+    standings = await fetch('/api/standings').then(r => r.json());
+    updateRecord(curTeamId);
+    renderStandingsTab();
+  } catch (e) {
+    el.innerHTML = `<div class="msg">❌ ${e.message}</div>`;
+  }
+  loadTodayGames();
+}
+
+async function loadTodayGames() {
+  const el = document.getElementById('todayGames');
+  el.innerHTML = '<div class="msg"><span class="spinner"></span>불러오는 중…</div>';
+  try {
+    const games = await fetch('/api/today').then(r => r.json());
+    if (games.error) throw new Error(games.error);
+
+    // 날짜 레이블
+    const d = new Date();
+    document.getElementById('todayDateLabel').textContent =
+      `${d.getMonth()+1}월 ${d.getDate()}일 경기`;
+
+    if (!games.length) {
+      el.innerHTML = '<div class="msg">오늘 예정된 경기가 없습니다.</div>';
+      return;
+    }
+
+    const now = new Date();
+    el.innerHTML = games.map(g => {
+      let scoreHtml, metaHtml;
+      const [h, m] = (g.time || '23:59').split(':').map(Number);
+      const gameTime = new Date(now); gameTime.setHours(h, m, 0, 0);
+      const timePassed = now >= gameTime;
+
+      if (g.status === 'FINAL') {
+        const aCls = g.awayScore > g.homeScore ? 'win' : g.awayScore < g.homeScore ? 'lose' : 'draw';
+        const hCls = g.homeScore > g.awayScore ? 'win' : g.homeScore < g.awayScore ? 'lose' : 'draw';
+        scoreHtml = `<div class="today-scores">
+          <span class="${aCls}">${g.awayScore}</span>
+          <span class="sep">:</span>
+          <span class="${hCls}">${g.homeScore}</span>
+        </div>`;
+        const pitcherHtml = (g.winPitcher || g.losePitcher) ? `
+          <div class="pitcher-info">
+            ${g.winPitcher  ? `<span class="p-win">승 ${g.winPitcher}</span>`  : ''}
+            ${g.losePitcher ? `<span class="p-lose">패 ${g.losePitcher}</span>` : ''}
+          </div>` : '';
+        metaHtml = `<div class="today-meta">종료</div>${pitcherHtml}`;
+      } else if (g.status === 'INPLAY' || (g.status === 'READY' && timePassed)) {
+        scoreHtml = `<div class="today-scores">
+          <span>${g.awayScore}</span>
+          <span class="sep">:</span>
+          <span>${g.homeScore}</span>
+        </div>`;
+        metaHtml = `<div class="today-meta today-live">● 진행중</div>`;
+      } else if (g.status === 'CANCEL') {
+        scoreHtml = `<div class="today-time" style="color:var(--muted)">취소</div>`;
+        metaHtml = `<div class="today-meta">${g.statusInfo || ''}</div>`;
+      } else {
+        scoreHtml = `<div class="today-time">${g.time || 'TBD'}</div>`;
+        metaHtml = `<div class="today-meta">경기전</div>`;
+      }
+
+      const awayImg = g.awayEmblem ? `<img src="${g.awayEmblem}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;margin-right:3px">` : '';
+      const homeImg = g.homeEmblem ? `<img src="${g.homeEmblem}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;margin-right:3px">` : '';
+
+      return `<div class="today-card" data-home-code="${g.homeTeamCode}" data-game-id="${g.gameId || ''}" style="cursor:pointer">
+        <div class="today-matchup">
+          <div class="today-team">${awayImg}${g.away}</div>
+          <div class="today-score-area">${scoreHtml}</div>
+          <div class="today-team">${homeImg}${g.home}</div>
+        </div>
+        ${metaHtml}
+      </div>`;
+    }).join('');
+
+    // 카드 클릭 → 팀별 기록 > 경기 일정 이동
+    el.querySelectorAll('.today-card[data-home-code]').forEach(card => {
+      card.addEventListener('click', () => {
+        const code   = card.dataset.homeCode;
+        const gameId = card.dataset.gameId;
+        if (!code) return;
+        goToTeamSchedule(code, gameId);
+      });
+    });
+  } catch (e) {
+    el.innerHTML = `<div class="msg">❌ ${e.message}</div>`;
+  }
+}
+
+function goToTeamSchedule(teamCode, gameId) {
+  // 오늘 날짜로 월 강제 설정
+  const today = new Date();
+  curYear  = today.getFullYear();
+  curMonth = today.getMonth() + 1;
+
+  // 대메뉴 → 팀별 기록
+  document.querySelectorAll('nav button').forEach(b => {
+    b.classList.remove('active'); b.style.borderBottomColor = '';
+  });
+  const teamMenuBtn = document.querySelector('nav button[data-menu="team"]');
+  teamMenuBtn.classList.add('active');
+  setAccentColor(teamMenuBtn);
+
+  document.getElementById('panel-team').classList.add('active');
+  document.getElementById('panel-standings').classList.remove('active');
+  document.getElementById('teamContext').style.display = 'block';
+
+  // 서브탭 → 경기 일정
+  curSubTab = 'schedule';
+  document.querySelectorAll('.sub-nav button').forEach(b => b.classList.remove('active'));
+  document.querySelector('.sub-nav button[data-sub="schedule"]').classList.add('active');
+  document.querySelectorAll('#sub-schedule, #sub-hitters, #sub-pitchers').forEach(p => p.classList.remove('active'));
+  document.getElementById('sub-schedule').classList.add('active');
+
+  // 자동 펼침 gameId 설정
+  pendingAutoOpen = gameId || null;
+
+  // 팀 선택 → loadSchedule 내부 호출됨
+  selectTeam(teamCode);
+}
+
+function renderStandingsTab() {
+  const el = document.getElementById('standingsTable');
+  if (!standings.length) {
+    el.innerHTML = '<div class="msg">순위 데이터가 없습니다.</div>';
+    return;
+  }
+
+  const last5Badge = c => {
+    if (c === 'W') return `<span class="l5-badge l5-w">W</span>`;
+    if (c === 'L') return `<span class="l5-badge l5-l">L</span>`;
+    return `<span class="l5-badge l5-d">D</span>`;
+  };
+
+  const rows = standings.map(s => {
+    const rankColor = +s.rank <= 5 ? 'var(--win)' : 'var(--text2)';
+    const last5Html = `<div class="l5-wrap">${(s.last5 || '').split('').map(last5Badge).join('')}</div>`;
+    const emblemHtml = s.emblem
+      ? `<img src="${s.emblem}" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px">`
+      : '';
+    return `<tr>
+      <td style="text-align:center;font-weight:700;color:${rankColor}">${s.rank}</td>
+      <td class="col-name">${emblemHtml}${s.teamName}</td>
+      <td>${s.g}</td>
+      <td style="color:var(--win);font-weight:700">${s.w}</td>
+      <td style="color:var(--lose);font-weight:700">${s.l}</td>
+      <td style="color:var(--draw)">${s.d}</td>
+      <td style="font-weight:600">${s.pct}</td>
+      <td style="color:var(--muted)">${s.gb}</td>
+      <td style="color:var(--text2);font-size:11px">${s.streak}</td>
+      <td style="text-align:center">${last5Html}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:center;width:36px">순위</th>
+          <th class="col-name">팀</th>
+          <th>경기</th>
+          <th>승</th>
+          <th>패</th>
+          <th>무</th>
+          <th>승률</th>
+          <th>게임차</th>
+          <th>연속</th>
+          <th>최근 5경기</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Boot ──────────────────────────────────────────────────
+init().then(() => loadSchedule());
+</script>
+</body>
+</html>
