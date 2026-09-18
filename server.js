@@ -432,9 +432,10 @@ app.get('/api/highlight', async (req, res) => {
             ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
         const allVideos = contents.filter(c => c.videoRenderer).map(c => c.videoRenderer);
-        // TVING SPORTS 채널 우선, 없으면 제목에 하이라이트 포함된 첫 번째
-        const video = allVideos.find(v => v.ownerText?.runs?.[0]?.text?.includes('TVING'))
-            || allVideos.find(v => v.title?.runs?.[0]?.text?.includes('하이라이트'));
+        const tvingVideos = allVideos.filter(v => v.ownerText?.runs?.[0]?.text?.includes('TVING'));
+        // 날짜(예: "9/16") + TVING 채널 둘 다 일치하는 것만, 없으면 null
+        const video = tvingVideos.find(v => (v.title?.runs?.[0]?.text || '').includes(dateLabel))
+            || null;
 
         res.json({ videoId: video?.videoId || null, title: video?.title?.runs?.[0]?.text || null });
     } catch (e) {
