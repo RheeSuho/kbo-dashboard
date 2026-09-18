@@ -345,6 +345,7 @@ thead th {
   top: 0;
 }
 th.col-name { text-align: left; }
+th.col-backnum, td.col-backnum { width: 36px; color: var(--muted); font-size: 11px; }
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--text); }
 th.sort-asc::after  { content: ' ▲'; color: var(--team-color); }
@@ -1289,7 +1290,7 @@ function renderLinescore(g, hl) {
 }
 
 // ── Hitters ───────────────────────────────────────────────
-const HIT_COLS = ['선수명','AVG','G','PA','HR','RBI','H','R','2B','3B','SB'];
+const HIT_COLS = ['등번호','선수명','AVG','G','PA','HR','RBI','H','R','2B','3B','SB'];
 const HIT_HI   = new Set(['AVG','HR','RBI']);
 
 document.getElementById('refreshHitters').addEventListener('click', () => loadHitters(true));
@@ -1310,7 +1311,7 @@ async function loadHitters(force = false) {
 }
 
 // ── Pitchers ──────────────────────────────────────────────
-const PIT_COLS = ['선수명','ERA','G','W','L','SV','HLD','IP','SO','BB','WHIP'];
+const PIT_COLS = ['등번호','선수명','ERA','G','W','L','SV','HLD','IP','SO','BB','WHIP'];
 const PIT_HI   = new Set(['ERA']);
 
 document.getElementById('refreshPitchers').addEventListener('click', () => loadPitchers(true));
@@ -1334,7 +1335,8 @@ async function loadPitchers(force = false) {
 function renderStats(containerId, data, cols, hiSet, sortState, tableKey) {
   const el = document.getElementById(containerId);
   const { headers, players } = data;
-  const vis = cols.filter(c => headers.includes(c));
+  const allKeys = [...headers, '등번호'];
+  const vis = cols.filter(c => allKeys.includes(c));
 
   if (!players.length) {
     el.innerHTML = '<div class="msg">선수 데이터가 없습니다.</div>';
@@ -1369,6 +1371,7 @@ function renderStats(containerId, data, cols, hiSet, sortState, tableKey) {
     const isSorted = sortState.col === c;
     const cls = [
       isName ? 'col-name' : '',
+      c === '등번호' ? 'col-backnum' : '',
       'sortable',
       isSorted ? (sortState.dir === -1 ? 'sort-desc' : 'sort-asc') : '',
     ].filter(Boolean).join(' ');
@@ -1378,7 +1381,7 @@ function renderStats(containerId, data, cols, hiSet, sortState, tableKey) {
   // 바디 렌더
   const trHtml = sorted.map(p =>
     `<tr>${vis.map(c =>
-      `<td class="${c === '선수명' ? 'col-name' : ''} ${hiSet.has(c) ? 'hi' : ''}">${p[c] ?? '-'}</td>`
+      `<td class="${c === '선수명' ? 'col-name' : ''} ${c === '등번호' ? 'col-backnum' : ''} ${hiSet.has(c) ? 'hi' : ''}">${p[c] ?? '-'}</td>`
     ).join('')}</tr>`
   ).join('');
 

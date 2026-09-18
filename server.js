@@ -143,7 +143,7 @@ async function fetchWithTeamFilter(pageUrl, teamId) {
 }
 
 // ── Helper: parse tData01 table ───────────────────────────
-function parseStatsTable(html) {
+function parseStatsTable(html, type = 'hitter') {
     const $ = cheerio.load(html);
     const headers = [];
     $('table.tData01 thead th').each((_, el) => headers.push($(el).text().trim()));
@@ -154,11 +154,35 @@ function parseStatsTable(html) {
         if (cells.length >= 3) {
             const p = {};
             headers.forEach((h, i) => { p[h] = cells[i] || '-'; });
+            const link = $(row).find('a').attr('href') || '';
+            const m = link.match(/playerId=(\d+)/);
+            if (m) p._playerId = m[1];
+            p._type = type;
             players.push(p);
         }
     });
 
     return { headers, players };
+}
+
+// ── Helper: fetch backnum for players (캐시 적용) ─────────
+const backnumCache = new Map();
+async function fetchBacknums(players) {
+    const needFetch = players.filter(p => p._playerId && !backnumCache.has(p._playerId));
+    await Promise.all(needFetch.map(async p => {
+        try {
+            const detailPath = p._type === 'pitcher'
+                ? 'PitcherDetail' : 'HitterDetail';
+            const url = `${KBO_BASE}/Record/Player/${detailPath}/Basic.aspx?playerId=${p._playerId}`;
+            const { data } = await axios.get(url, { headers: HEADERS, timeout: 8000 });
+            const m = data.match(/lblBackNo">(\d+)</);
+            backnumCache.set(p._playerId, m ? m[1] : '-');
+        } catch { backnumCache.set(p._playerId, '-'); }
+    }));
+    return players.map(p => ({
+        ...p,
+        등번호: p._playerId ? (backnumCache.get(p._playerId) || '-') : '-',
+    }));
 }
 
 // ── Teams ─────────────────────────────────────────────────
@@ -447,7 +471,9 @@ app.get('/api/hitters', async (req, res) => {
     try {
         const teamId = req.query.teamId || 'HH';
         const html = await fetchWithTeamFilter(`${KBO_BASE}/Record/Player/HitterBasic/Basic1.aspx`, teamId);
-        res.json(parseStatsTable(html));
+        const result = parseStatsTable(html, 'hitter');
+        result.players = await fetchBacknums(result.players);
+        res.json(result);
     } catch (e) {
         console.error('[hitters]', e.message);
         res.status(500).json({ error: e.message });
@@ -459,7 +485,9 @@ app.get('/api/pitchers', async (req, res) => {
     try {
         const teamId = req.query.teamId || 'HH';
         const html = await fetchWithTeamFilter(`${KBO_BASE}/Record/Player/PitcherBasic/Basic1.aspx`, teamId);
-        res.json(parseStatsTable(html));
+        const result = parseStatsTable(html, 'pitcher');
+        result.players = await fetchBacknums(result.players);
+        res.json(result);
     } catch (e) {
         console.error('[pitchers]', e.message);
         res.status(500).json({ error: e.message });
