@@ -993,10 +993,28 @@ async function loadSchedule() {
   el.innerHTML = '<div class="msg"><span class="spinner"></span>불러오는 중…</div>';
 
   try {
-    const url = `/api/schedule?year=${curYear}&month=${curMonth}&teamId=${curTeamId}`;
-    const data = await fetch(url).then(r => r.json());
+    const now = new Date();
+    const isCurrentMonth = curYear === now.getFullYear() && curMonth === now.getMonth() + 1;
+
+    const [data, todayGames] = await Promise.all([
+      fetch(`/api/schedule?year=${curYear}&month=${curMonth}&teamId=${curTeamId}`).then(r => r.json()),
+      isCurrentMonth ? fetch('/api/today').then(r => r.json()).catch(() => []) : Promise.resolve([]),
+    ]);
     if (data.error) throw new Error(data.error);
-    renderSchedule(data.games);
+
+    // 오늘 경기 실시간 상태 덮어쓰기
+    const todayMap = {};
+    (Array.isArray(todayGames) ? todayGames : []).forEach(g => { if (g.gameId) todayMap[g.gameId] = g; });
+    const games = data.games.map(g => {
+      if (g.gameId && todayMap[g.gameId]) {
+        const live = todayMap[g.gameId];
+        return { ...g, liveStatus: live.status, liveStatusInfo: live.statusInfo,
+                 liveAwayScore: live.awayScore, liveHomeScore: live.homeScore };
+      }
+      return g;
+    });
+
+    renderSchedule(games);
     scheduleLoaded = true;
   } catch (e) {
     el.innerHTML = `<div class="msg">❌ ${e.message}</div>`;
@@ -1017,9 +1035,14 @@ function renderSchedule(games) {
     else if (g.result === 'L') l++;
     else if (g.result === 'D') d++;
 
+    const isLive = g.liveStatus === 'STARTED' || g.liveStatus === 'INPLAY';
+    const isFinalByLive = g.liveStatus === 'FINAL';
+    const effectiveCompleted = g.completed || isFinalByLive;
+
     const canExpand = !!g.gameId;
-    const rowCls = g.completed
+    const rowCls = effectiveCompleted
       ? (g.result === 'W' ? 'win-row' : g.result === 'L' ? 'lose-row' : 'draw-row')
+      : isLive ? 'upcoming'
       : 'upcoming';
 
     const opponent = g.isHome ? g.away : g.home;
@@ -1031,9 +1054,9 @@ function renderSchedule(games) {
     const haBadge = `<span class="ha-badge ${g.isHome ? 'ha-home' : 'ha-away'}">${g.isHome ? 'H' : 'A'}</span>`;
 
     let matchupInner;
-    if (g.completed) {
-      const myScore  = g.isHome ? g.homeScore  : g.awayScore;
-      const oppScore = g.isHome ? g.awayScore  : g.homeScore;
+    if (effectiveCompleted) {
+      const myScore  = g.isHome ? (g.liveHomeScore ?? g.homeScore) : (g.liveAwayScore ?? g.awayScore);
+      const oppScore = g.isHome ? (g.liveAwayScore ?? g.awayScore) : (g.liveHomeScore ?? g.homeScore);
       const myCls    = g.result === 'W' ? 'score-win' : g.result === 'L' ? 'score-lose' : '';
       matchupInner = `
         <span class="team-name my-team">${teamName}</span>
@@ -1041,6 +1064,16 @@ function renderSchedule(games) {
         <span class="inline-sep">:</span>
         <span class="inline-score">${oppScore}</span>
         <span class="team-name">${opponent}</span>`;
+    } else if (isLive) {
+      const myScore  = g.isHome ? g.liveHomeScore : g.liveAwayScore;
+      const oppScore = g.isHome ? g.liveAwayScore : g.liveHomeScore;
+      matchupInner = `
+        <span class="team-name my-team">${teamName}</span>
+        <span class="inline-score">${myScore ?? 0}</span>
+        <span class="inline-sep">:</span>
+        <span class="inline-score">${oppScore ?? 0}</span>
+        <span class="team-name">${opponent}</span>
+        <span class="today-live" style="font-size:11px;margin-left:6px">● ${g.liveStatusInfo || '진행중'}</span>`;
     } else {
       const myStarter  = g.isHome ? g.homeStarter : g.awayStarter;
       const oppStarter = g.isHome ? g.awayStarter : g.homeStarter;
@@ -1055,11 +1088,11 @@ function renderSchedule(games) {
         <span class="upcoming-time">${g.time || 'TBD'}</span>`;
     }
 
-    const resultBadge = g.completed
+    const resultBadge = effectiveCompleted
       ? `<span class="result-badge badge-${g.result}">${g.result === 'W' ? '승' : g.result === 'L' ? '패' : '무'}</span>`
       : '';
 
-    const pitcherBadge = g.completed && (g.winPitcher || g.losePitcher)
+    const pitcherBadge = effectiveCompleted && (g.winPitcher || g.losePitcher)
       ? `<div class="row-pitcher-info">
           ${g.winPitcher  ? `<span class="p-win">승 ${g.winPitcher}</span>`  : ''}
           ${g.losePitcher ? `<span class="p-lose">패 ${g.losePitcher}</span>` : ''}
@@ -1589,8 +1622,12 @@ function renderStandingsTab() {
 // ── Boot ──────────────────────────────────────────────────
 init().then(() => loadSchedule());
 
-// 오늘 경기 5분마다 자동 갱신 (경기 중 상태 반영)
-setInterval(() => loadTodayGames(), 5 * 60 * 1000);
+// 오늘 경기 + 이번 달 스케줄 5분마다 자동 갱신
+setInterval(() => {
+  loadTodayGames();
+  const now = new Date();
+  if (curYear === now.getFullYear() && curMonth === now.getMonth() + 1) loadSchedule();
+}, 5 * 60 * 1000);
 </script>
 </body>
 </html>
