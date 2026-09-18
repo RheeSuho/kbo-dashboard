@@ -1459,7 +1459,7 @@ async function loadTodayGames() {
             ${g.losePitcher ? `<span class="p-lose">패 ${g.losePitcher}</span>` : ''}
           </div>` : '';
         metaHtml = `<div class="today-meta">종료</div>${pitcherHtml}`;
-      } else if (g.status === 'INPLAY' || (g.status === 'READY' && timePassed)) {
+      } else if (g.status === 'INPLAY' || g.status === 'STARTED' || (g.status === 'READY' && timePassed)) {
         scoreHtml = `<div class="today-scores">
           <span>${g.awayScore}</span>
           <span class="sep">:</span>
