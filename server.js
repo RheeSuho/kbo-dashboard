@@ -171,18 +171,22 @@ async function fetchBacknums(players) {
     const needFetch = players.filter(p => p._playerId && !backnumCache.has(p._playerId));
     await Promise.all(needFetch.map(async p => {
         try {
-            const detailPath = p._type === 'pitcher'
-                ? 'PitcherDetail' : 'HitterDetail';
+            const detailPath = p._type === 'pitcher' ? 'PitcherDetail' : 'HitterDetail';
             const url = `${KBO_BASE}/Record/Player/${detailPath}/Basic.aspx?playerId=${p._playerId}`;
             const { data } = await axios.get(url, { headers: HEADERS, timeout: 8000 });
-            const m = data.match(/lblBackNo">(\d+)</);
-            backnumCache.set(p._playerId, m ? m[1] : '-');
-        } catch { backnumCache.set(p._playerId, '-'); }
+            const numM = data.match(/lblBackNo">(\d+)</);
+            const posM = data.match(/lblPosition">([^<]+)</);
+            const pos = posM ? posM[1] : '';
+            backnumCache.set(p._playerId, {
+                backnum: numM ? numM[1] : '-',
+                isPitcher: pos.includes('투수'),
+            });
+        } catch { backnumCache.set(p._playerId, { backnum: '-', isPitcher: false }); }
     }));
-    return players.map(p => ({
-        ...p,
-        등번호: p._playerId ? (backnumCache.get(p._playerId) || '-') : '-',
-    }));
+    return players.map(p => {
+        const cached = p._playerId ? backnumCache.get(p._playerId) : null;
+        return { ...p, 등번호: cached?.backnum ?? '-', _isPitcher: cached?.isPitcher ?? false };
+    });
 }
 
 // ── Teams ─────────────────────────────────────────────────
@@ -473,6 +477,7 @@ app.get('/api/hitters', async (req, res) => {
         const html = await fetchWithTeamFilter(`${KBO_BASE}/Record/Player/HitterBasic/Basic1.aspx`, teamId);
         const result = parseStatsTable(html, 'hitter');
         result.players = await fetchBacknums(result.players);
+        result.players = result.players.filter(p => !p._isPitcher);
         res.json(result);
     } catch (e) {
         console.error('[hitters]', e.message);
