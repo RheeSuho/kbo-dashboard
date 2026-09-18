@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const axios   = require('axios');
 const cheerio = require('cheerio');
@@ -428,32 +429,60 @@ app.get('/api/preview/:gameId', async (req, res) => {
     }
 });
 
-// ── YouTube highlight (RSS 방식, 누적 저장) ───────────────
+// ── YouTube highlight (Data API v3 + RSS fallback) ────────
 const TVING_CHANNEL_ID = 'UC8JtQf77wqhVpOQ8Cze8JjA';
-let rssCache = { data: null, t: 0 };
-// RSS에서 발견한 영상을 서버 실행 동안 누적 (videoId → title)
+// videoId → title 누적 저장
 const highlightStore = new Map();
+let ytApiCache = { t: 0 };  // API 호출 1시간 캐시
+let rssCache   = { data: null, t: 0 };  // RSS 30분 캐시
 
-function storeRssEntries(xml) {
-    const entries = [...xml.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>[\s\S]*?<title>([^<]+)<\/title>/g)];
-    entries.forEach(([, videoId, title]) => {
-        if (!highlightStore.has(videoId)) highlightStore.set(videoId, title);
-    });
+async function refreshHighlights() {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (apiKey) {
+        // YouTube Data API v3: 페이지 단위로 최대 200개 수집
+        if (Date.now() - ytApiCache.t < 60 * 60 * 1000) return;
+        const publishedAfter = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+        let pageToken;
+        let pages = 0;
+        do {
+            const params = {
+                part: 'snippet',
+                channelId: TVING_CHANNEL_ID,
+                type: 'video',
+                q: 'KBO 하이라이트',
+                maxResults: 50,
+                order: 'date',
+                publishedAfter,
+                key: apiKey,
+            };
+            if (pageToken) params.pageToken = pageToken;
+            const { data } = await axios.get('https://www.googleapis.com/youtube/v3/search', { params, timeout: 10000 });
+            (data.items || []).forEach(item => {
+                const videoId = item.id?.videoId;
+                const title   = item.snippet?.title;
+                if (videoId && title) highlightStore.set(videoId, title);
+            });
+            pageToken = data.nextPageToken;
+            pages++;
+        } while (pageToken && pages < 4);
+        ytApiCache = { t: Date.now() };
+    } else {
+        // API 키 없을 때 RSS fallback
+        if (rssCache.data && Date.now() - rssCache.t < 30 * 60 * 1000) return;
+        const { data } = await axios.get(
+            `https://www.youtube.com/feeds/videos.xml?channel_id=${TVING_CHANNEL_ID}`,
+            { timeout: 8000 }
+        );
+        rssCache = { data, t: Date.now() };
+        const entries = [...data.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>[\s\S]*?<title>([^<]+)<\/title>/g)];
+        entries.forEach(([, videoId, title]) => {
+            if (!highlightStore.has(videoId)) highlightStore.set(videoId, title);
+        });
+    }
 }
 
-async function fetchTvingRss() {
-    if (rssCache.data && Date.now() - rssCache.t < 30 * 60 * 1000) return rssCache.data;
-    const { data } = await axios.get(
-        `https://www.youtube.com/feeds/videos.xml?channel_id=${TVING_CHANNEL_ID}`,
-        { timeout: 8000 }
-    );
-    rssCache = { data, t: Date.now() };
-    storeRssEntries(data);
-    return data;
-}
-
-// 서버 시작 시 초기 RSS 미리 로드
-fetchTvingRss().catch(e => console.warn('[init RSS]', e.message));
+// 서버 시작 시 초기 로드
+refreshHighlights().catch(e => console.warn('[init highlights]', e.message));
 
 app.get('/api/highlight', async (req, res) => {
     try {
@@ -465,10 +494,8 @@ app.get('/api/highlight', async (req, res) => {
         const d = parseInt(dateStr.slice(6, 8), 10);
         const dateLabel = `${m}/${d}`;   // "9/17"
 
-        // RSS 폴링 → 새 영상 누적 저장
-        await fetchTvingRss();
+        await refreshHighlights();
 
-        // 누적된 전체 영상에서 검색
         let matchId = null, matchTitle = null;
         for (const [videoId, title] of highlightStore) {
             if (title.includes(dateLabel) && (title.includes(away) || title.includes(home))) {
