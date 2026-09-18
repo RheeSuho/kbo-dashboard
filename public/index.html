@@ -1465,7 +1465,7 @@ async function loadTodayGames() {
           <span class="sep">:</span>
           <span>${g.homeScore}</span>
         </div>`;
-        metaHtml = `<div class="today-meta today-live">● 진행중</div>`;
+        metaHtml = `<div class="today-meta today-live">● ${g.statusInfo || '진행중'}</div>`;
       } else if (g.status === 'CANCEL') {
         scoreHtml = `<div class="today-time" style="color:var(--muted)">취소</div>`;
         metaHtml = `<div class="today-meta">${g.statusInfo || ''}</div>`;
