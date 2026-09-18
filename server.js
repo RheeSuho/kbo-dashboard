@@ -400,44 +400,42 @@ app.get('/api/preview/:gameId', async (req, res) => {
     }
 });
 
-// ── YouTube highlight ─────────────────────────────────────
+// ── YouTube highlight (RSS 방식) ──────────────────────────
+const TVING_CHANNEL_ID = 'UC8JtQf77wqhVpOQ8Cze8JjA';
+let rssCache = { data: null, t: 0 };
+
+async function fetchTvingRss() {
+    if (rssCache.data && Date.now() - rssCache.t < 30 * 60 * 1000) return rssCache.data;
+    const { data } = await axios.get(
+        `https://www.youtube.com/feeds/videos.xml?channel_id=${TVING_CHANNEL_ID}`,
+        { timeout: 8000 }
+    );
+    rssCache = { data, t: Date.now() };
+    return data;
+}
+
 app.get('/api/highlight', async (req, res) => {
     try {
         const { gameId, away, home } = req.query;
         if (!gameId || !away || !home) return res.status(400).json({ error: 'missing params' });
 
-        // gameId: 20260917SKNC02026 → 날짜 2026-09-17 → "9/17"
-        const dateStr = gameId.slice(0, 8);             // "20260917"
-        const m = parseInt(dateStr.slice(4, 6), 10);    // 9
-        const d = parseInt(dateStr.slice(6, 8), 10);    // 17
-        const dateLabel = `${m}/${d}`;                  // "9/17"
+        const dateStr = gameId.slice(0, 8);
+        const m = parseInt(dateStr.slice(4, 6), 10);
+        const d = parseInt(dateStr.slice(6, 8), 10);
+        const dateLabel = `${m}/${d}`;   // "9/17"
 
-        const q = encodeURIComponent(`${away} ${home} 하이라이트 ${dateLabel} TVING`);
-        const { data: html } = await axios.get(
-            `https://www.youtube.com/results?search_query=${q}`,
-            {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-                    'Accept-Language': 'ko-KR,ko;q=0.9',
-                },
-                timeout: 8000,
-            }
+        const xml = await fetchTvingRss();
+
+        // <entry> 블록마다 videoId + title 추출
+        const entries = [...xml.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>[\s\S]*?<title>([^<]+)<\/title>/g)];
+        const match = entries.find(([, , title]) =>
+            title.includes(dateLabel) &&
+            (title.includes(away) || title.includes(home))
         );
 
-        const match = html.match(/var ytInitialData = (.+?);<\/script>/);
-        if (!match) return res.json({ videoId: null });
-
-        const ytData = JSON.parse(match[1]);
-        const contents = ytData?.contents?.twoColumnSearchResultsRenderer?.primaryContents
-            ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
-
-        const allVideos = contents.filter(c => c.videoRenderer).map(c => c.videoRenderer);
-        const tvingVideos = allVideos.filter(v => v.ownerText?.runs?.[0]?.text?.includes('TVING'));
-        // 날짜(예: "9/16") + TVING 채널 둘 다 일치하는 것만, 없으면 null
-        const video = tvingVideos.find(v => (v.title?.runs?.[0]?.text || '').includes(dateLabel))
-            || null;
-
-        res.json({ videoId: video?.videoId || null, title: video?.title?.runs?.[0]?.text || null });
+        const videoId = match ? match[1] : null;
+        const title   = match ? match[2] : null;
+        res.json({ videoId, title });
     } catch (e) {
         console.error('[highlight]', e.message);
         res.status(500).json({ error: e.message });
