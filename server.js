@@ -431,10 +431,10 @@ app.get('/api/highlight', async (req, res) => {
         const contents = ytData?.contents?.twoColumnSearchResultsRenderer?.primaryContents
             ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
-        const video = contents
-            .filter(c => c.videoRenderer)
-            .map(c => c.videoRenderer)
-            .find(v => v.ownerText?.runs?.[0]?.text === 'TVING SPORTS');
+        const allVideos = contents.filter(c => c.videoRenderer).map(c => c.videoRenderer);
+        // TVING SPORTS 채널 우선, 없으면 제목에 하이라이트 포함된 첫 번째
+        const video = allVideos.find(v => v.ownerText?.runs?.[0]?.text?.includes('TVING'))
+            || allVideos.find(v => v.title?.runs?.[0]?.text?.includes('하이라이트'));
 
         res.json({ videoId: video?.videoId || null, title: video?.title?.runs?.[0]?.text || null });
     } catch (e) {
