@@ -316,6 +316,19 @@ main { max-width: 1000px; margin: 0 auto; padding: 20px 16px; }
   margin-bottom: 14px;
 }
 .stats-title { font-size: 15px; font-weight: 700; }
+.player-search {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 10px;
+  outline: none;
+  width: 130px;
+  transition: border-color .15s;
+}
+.player-search::placeholder { color: var(--muted); }
+.player-search:focus { border-color: var(--team-color); }
 .refresh-btn {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -742,6 +755,7 @@ td.hi { color: var(--team-color); font-weight: 700; }
     <div id="sub-hitters" class="tab-panel">
       <div class="stats-toolbar">
         <div class="stats-title" id="hitterTitle">타자 기록</div>
+        <input type="search" id="hitterSearch" class="player-search" placeholder="선수 검색">
         <button class="refresh-btn" id="refreshHitters">↻ 새로고침</button>
       </div>
       <div id="hitterTable" class="table-scroll">
@@ -753,6 +767,7 @@ td.hi { color: var(--team-color); font-weight: 700; }
     <div id="sub-pitchers" class="tab-panel">
       <div class="stats-toolbar">
         <div class="stats-title" id="pitcherTitle">투수 기록</div>
+        <input type="search" id="pitcherSearch" class="player-search" placeholder="선수 검색">
         <button class="refresh-btn" id="refreshPitchers">↻ 새로고침</button>
       </div>
       <div id="pitcherTable" class="table-scroll">
@@ -1327,6 +1342,9 @@ const HIT_COLS = ['등번호','선수명','AVG','G','PA','HR','RBI','H','R','2B'
 const HIT_HI   = new Set(['AVG','HR','RBI']);
 
 document.getElementById('refreshHitters').addEventListener('click', () => loadHitters(true));
+document.getElementById('hitterSearch').addEventListener('input', () => {
+  if (cacheHit[curTeamId]) renderStats('hitterTable', cacheHit[curTeamId], HIT_COLS, HIT_HI, hitSort, 'hitters');
+});
 
 async function loadHitters(force = false) {
   if (cacheHit[curTeamId] && !force) { renderStats('hitterTable', cacheHit[curTeamId], HIT_COLS, HIT_HI, hitSort, 'hitters'); return; }
@@ -1348,6 +1366,9 @@ const PIT_COLS = ['등번호','선수명','ERA','G','W','L','SV','HLD','IP','SO'
 const PIT_HI   = new Set(['ERA']);
 
 document.getElementById('refreshPitchers').addEventListener('click', () => loadPitchers(true));
+document.getElementById('pitcherSearch').addEventListener('input', () => {
+  if (cachePitch[curTeamId]) renderStats('pitcherTable', cachePitch[curTeamId], PIT_COLS, PIT_HI, pitSort, 'pitchers');
+});
 
 async function loadPitchers(force = false) {
   if (cachePitch[curTeamId] && !force) { renderStats('pitcherTable', cachePitch[curTeamId], PIT_COLS, PIT_HI, pitSort, 'pitchers'); return; }
@@ -1371,13 +1392,20 @@ function renderStats(containerId, data, cols, hiSet, sortState, tableKey) {
   const allKeys = [...headers, '등번호'];
   const vis = cols.filter(c => allKeys.includes(c));
 
-  if (!players.length) {
-    el.innerHTML = '<div class="msg">선수 데이터가 없습니다.</div>';
+  // 검색 필터링
+  const searchId = tableKey === 'hitters' ? 'hitterSearch' : 'pitcherSearch';
+  const query = (document.getElementById(searchId)?.value || '').trim();
+  const filtered = query ? players.filter(p => (p['선수명'] || '').includes(query)) : players;
+
+  if (!filtered.length) {
+    el.innerHTML = query
+      ? `<div class="msg">'${query}' 검색 결과가 없습니다.</div>`
+      : '<div class="msg">선수 데이터가 없습니다.</div>';
     return;
   }
 
   // 정렬 적용
-  let sorted = [...players];
+  let sorted = [...filtered];
   if (sortState.col) {
     sorted.sort((a, b) => {
       const va = a[sortState.col] ?? '-';
